@@ -4,6 +4,7 @@ import java.io.IOException;
 import static java.lang.Integer.parseInt;
 import java.net.ServerSocket;
 import java.net.Socket;
+import org.json.simple.parser.ParseException;
 
 /**
  * Collects weather station data and updates the user clients.
@@ -18,10 +19,18 @@ public class Server {
      * @param args
      * @throws IOException 
      */
-    public static void main(String[] args) throws IOException {
-        int port = parseInt(args[0]);
-        Server server = new Server();
-        server.run(port);
+    public static void main(String[] args) throws IOException, ParseException {
+//        int port = parseInt(args[0]);
+//        Server server = new Server();
+//        server.run(port);
+
+        // Temporary database testing
+        Database database = new Database("db.txt");
+        database.addUser("petar", "password123");
+        System.out.println(database.authenticateUser("petar", "password123"));
+        System.out.println(database.authenticateUser("petar", "password1234"));
+        System.out.println(database.authenticateUser("john", "password123"));
+        return;
     }
 
     /**
