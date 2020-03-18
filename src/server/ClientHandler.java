@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import org.json.simple.parser.ParseException;
 
+import shared.utilities.AuthenticationResponseMessage;
 import shared.utilities.Message;
+import shared.utilities.UserAuthenticationMessage;
 
 /**
  * Gets spawned for each new client connection and is responsible for 
@@ -14,20 +17,22 @@ import shared.utilities.Message;
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
-    private final ObjectInputStream inputStream;
-    private final ObjectOutputStream outputStream;
+    private final Database database;
+    private final Server server;
     
     /**
      * Constructs a Client Handler and sets its socket, inputStream and 
      * outputStream.
      * 
      * @param socket
+     * @param database
+     * @param server
      * @throws IOException 
      */
-    public ClientHandler(Socket socket) throws IOException {
+    public ClientHandler(Socket socket, Database database, Server server) throws IOException {
         this.socket = socket;
-        this.inputStream = new ObjectInputStream(socket.getInputStream());
-        this.outputStream = new ObjectOutputStream(socket.getOutputStream());
+        this.database = database;
+        this.server = server;
     }
     
     /**
@@ -37,16 +42,14 @@ public class ClientHandler implements Runnable {
     public void run() {
         while(isReachable()) {
             try {
-                Message message = (Message) inputStream.readObject();
+                Message message = (Message)readObject();
                 processMessage(message);
             }
             catch(IOException e) {
-                System.out.println("Error in receiving message from client.");
-                e.printStackTrace();
+                // No message received, continue listening.
             } 
             catch (ClassNotFoundException e) {
                 System.out.println("Error in parsing message from client.");
-                e.printStackTrace();
             }
         }
     }
@@ -54,7 +57,7 @@ public class ClientHandler implements Runnable {
     /**
      * Checks if the client is reachable.
      * 
-     * @return 
+     * @return Boolean
      */
     private boolean isReachable() {
         try {
@@ -70,8 +73,59 @@ public class ClientHandler implements Runnable {
      * 
      * @param message 
      */
-    private void processMessage(Message message) {
-        throw new UnsupportedOperationException("Not supported yet.");
+    private void processMessage(Message message) throws IOException {
+        if(message instanceof UserAuthenticationMessage) {
+            authenticateUser((UserAuthenticationMessage)message);
+        }
+        //TODO: Add weather station message processing.
+    }
+
+    /**
+     * Check is the authentication message is valid and send a response to the
+     * user. If accepted, add this handler to the server's active users.
+     * 
+     * @param message
+     * @throws IOException
+     */
+    private void authenticateUser(UserAuthenticationMessage message) throws IOException {
+        try {
+            if(database.authenticateUser(message.getUsername(), message.getPassword())) {
+                sendObject(new AuthenticationResponseMessage(true));
+                server.addActiveUser(message.getUsername(), this);
+            }
+            else {
+                sendObject(new AuthenticationResponseMessage(false));
+            }
+        } catch (IOException | ParseException e) {
+            sendObject(new AuthenticationResponseMessage(false));
+        }
     }
     
+    /**
+     * Send an object to the client.
+     * 
+     * @param object
+     * @throws IOException 
+     */
+    private void sendObject(Object object) throws IOException {
+        ObjectOutputStream outputStream = new ObjectOutputStream(socket.getOutputStream());
+        outputStream.writeObject(object);
+        outputStream.flush();
+        outputStream.close();
+    }
+    
+    /**
+     * Reads an object from the client.
+     * 
+     * @return Object
+     * @throws IOException
+     * @throws ClassNotFoundException 
+     */
+    private Object readObject() throws IOException, ClassNotFoundException {
+        ObjectInputStream inputStream = new ObjectInputStream(socket.getInputStream());
+        Object object = inputStream.readObject();
+        inputStream.close();
+        return object;
+    }
+
 }
