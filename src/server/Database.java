@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.json.simple.JSONObject;
 import org.json.simple.parser.ParseException;
@@ -107,5 +109,16 @@ public class Database {
         fileWriter.write(string);
         fileWriter.flush();
         fileWriter.close();
+    }
+
+    /**
+     * Adds some dummy users to test the database.
+     */
+    void addDummyUsers() {
+        try {
+            addUser("test", "test");
+        } catch (ParseException | IOException e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -5,6 +5,7 @@ import static java.lang.Integer.parseInt;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
+import org.json.simple.parser.ParseException;
 
 /**
  * Collects weather station data and updates the user clients.
@@ -13,6 +14,10 @@ public class Server {
 
     private HashMap<String, ClientHandler> activeUsers;
     //TODO: Add weather stations.
+    
+    public Server() {
+        activeUsers = new HashMap<>();
+    }
     
     /**
      * Entry point for the server program.Parses a port from the command line arguments and runs the server.
@@ -36,6 +41,7 @@ public class Server {
     private void run(int port) throws IOException {
         ServerSocket server = new ServerSocket(port);
         Database database = new Database("database.txt");
+        database.addDummyUsers();
         while(true) {
             System.out.println("Waiting for client...");
             Socket client = server.accept();
@@ -54,6 +60,7 @@ public class Server {
      */
     public void addActiveUser(String username, ClientHandler userHandler) {
         activeUsers.put(username, userHandler);
+        System.out.println("New authenticated user: " + username);
     }
     
 }

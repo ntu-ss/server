@@ -1,8 +1,10 @@
 package server;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 import org.json.simple.parser.ParseException;
 
@@ -19,6 +21,8 @@ public class ClientHandler implements Runnable {
     private final Socket socket;
     private final Database database;
     private final Server server;
+    private final ObjectOutputStream oos;
+    private final ObjectInputStream ois;
     
     /**
      * Constructs a Client Handler and sets its socket, inputStream and 
@@ -33,6 +37,10 @@ public class ClientHandler implements Runnable {
         this.socket = socket;
         this.database = database;
         this.server = server;
+        OutputStream outputStream = socket.getOutputStream();
+        oos = new ObjectOutputStream(outputStream);
+        InputStream inputStream = socket.getInputStream();
+        ois = new ObjectInputStream(inputStream);
     }
     
     /**
@@ -43,6 +51,7 @@ public class ClientHandler implements Runnable {
         while(isReachable()) {
             try {
                 Message message = (Message)readObject();
+                System.out.println("Received message from " + socket.getInetAddress() + ". Processing...");
                 processMessage(message);
             }
             catch(IOException e) {
@@ -96,7 +105,8 @@ public class ClientHandler implements Runnable {
             else {
                 sendObject(new AuthenticationResponseMessage(false));
             }
-        } catch (IOException | ParseException e) {
+        } 
+        catch (IOException | ParseException e) {
             sendObject(new AuthenticationResponseMessage(false));
         }
     }
@@ -108,10 +118,8 @@ public class ClientHandler implements Runnable {
      * @throws IOException 
      */
     private void sendObject(Object object) throws IOException {
-        ObjectOutputStream outputStream = new ObjectOutputStream(socket.getOutputStream());
-        outputStream.writeObject(object);
-        outputStream.flush();
-        outputStream.close();
+        oos.writeObject(object);
+        oos.flush();
     }
     
     /**
@@ -122,9 +130,7 @@ public class ClientHandler implements Runnable {
      * @throws ClassNotFoundException 
      */
     private Object readObject() throws IOException, ClassNotFoundException {
-        ObjectInputStream inputStream = new ObjectInputStream(socket.getInputStream());
-        Object object = inputStream.readObject();
-        inputStream.close();
+        Object object = ois.readObject();
         return object;
     }
 
