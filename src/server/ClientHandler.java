@@ -8,54 +8,40 @@ import java.io.OutputStream;
 import java.net.Socket;
 import org.json.simple.parser.ParseException;
 
-import shared.utilities.AuthenticationResponseMessage;
+import shared.utilities.ClientAuthenticationResponse;
 import shared.utilities.Message;
-import shared.utilities.UserAuthenticationMessage;
+import shared.utilities.StationRegistrationRequest;
+import shared.utilities.UserAuthenticationRequest;
 
-/**
- * Gets spawned for each new client connection and is responsible for 
- * communicating with it.
- */
 public class ClientHandler implements Runnable {
 
     private final Socket socket;
-    private final Database database;
     private final Server server;
-    private final ObjectOutputStream oos;
-    private final ObjectInputStream ois;
+    private final ObjectOutputStream objectOutputStream;
+    private final ObjectInputStream objectInputStream;
+    private boolean isListening;
     
-    /**
-     * Constructs a Client Handler and sets its socket, inputStream and 
-     * outputStream.
-     * 
-     * @param socket
-     * @param database
-     * @param server
-     * @throws IOException 
-     */
-    public ClientHandler(Socket socket, Database database, Server server) throws IOException {
+    public ClientHandler(Socket socket, Server server) throws IOException {
         this.socket = socket;
-        this.database = database;
         this.server = server;
         OutputStream outputStream = socket.getOutputStream();
-        oos = new ObjectOutputStream(outputStream);
+        objectOutputStream = new ObjectOutputStream(outputStream);
         InputStream inputStream = socket.getInputStream();
-        ois = new ObjectInputStream(inputStream);
+        objectInputStream = new ObjectInputStream(inputStream);
+        isListening = true;
     }
     
-    /**
-     * Continuously reads messages from the client while it is reachable.
-     */
     @Override
     public void run() {
-        while(isReachable()) {
+        while(isReachable() && isListening) {
             try {
                 Message message = (Message)readObject();
                 System.out.println("Received message from " + socket.getInetAddress() + ". Processing...");
                 processMessage(message);
             }
             catch(IOException e) {
-                // No message received, continue listening.
+                System.out.println("Client disconnected before authenticating.");
+                break;
             } 
             catch (ClassNotFoundException e) {
                 System.out.println("Error in parsing message from client.");
@@ -63,11 +49,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /**
-     * Checks if the client is reachable.
-     * 
-     * @return Boolean
-     */
     private boolean isReachable() {
         try {
             return this.socket.getInetAddress().isReachable(300);
@@ -77,61 +58,48 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /**
-     * Determine the type of message and process it accordingly.
-     * 
-     * @param message 
-     */
     private void processMessage(Message message) throws IOException {
-        if(message instanceof UserAuthenticationMessage) {
-            authenticateUser((UserAuthenticationMessage)message);
+        if(message instanceof UserAuthenticationRequest) {
+            authenticateUser((UserAuthenticationRequest)message);
         }
-        //TODO: Add weather station message processing.
+        else if(message instanceof StationRegistrationRequest) {
+            registerStation((StationRegistrationRequest)message);
+        }
+        else {
+            System.out.println("Message not recognised.");
+        }
     }
 
-    /**
-     * Check is the authentication message is valid and send a response to the
-     * user. If accepted, add this handler to the server's active users.
-     * 
-     * @param message
-     * @throws IOException
-     */
-    private void authenticateUser(UserAuthenticationMessage message) throws IOException {
+    private void authenticateUser(UserAuthenticationRequest message) throws IOException {
         try {
-            if(database.authenticateUser(message.getUsername(), message.getPassword())) {
-                sendObject(new AuthenticationResponseMessage(true));
-                server.addActiveUser(message.getUsername(), this);
+            if(server.authenticateUser(message.getUsername(), message.getPassword())) {
+                sendObject(new ClientAuthenticationResponse(true));
+                System.out.println("authenticated user");
+                server.addActiveUser(message.getUsername(), socket, objectInputStream, objectOutputStream);
+                isListening = false;
             }
             else {
-                sendObject(new AuthenticationResponseMessage(false));
+                sendObject(new ClientAuthenticationResponse(false));
             }
         } 
         catch (IOException | ParseException e) {
-            sendObject(new AuthenticationResponseMessage(false));
+            sendObject(new ClientAuthenticationResponse(false));
         }
     }
-    
-    /**
-     * Send an object to the client.
-     * 
-     * @param object
-     * @throws IOException 
-     */
+
     private void sendObject(Object object) throws IOException {
-        oos.writeObject(object);
-        oos.flush();
+        objectOutputStream.writeObject(object);
+        objectOutputStream.flush();
     }
-    
-    /**
-     * Reads an object from the client.
-     * 
-     * @return Object
-     * @throws IOException
-     * @throws ClassNotFoundException 
-     */
+
     private Object readObject() throws IOException, ClassNotFoundException {
-        Object object = ois.readObject();
+        Object object = objectInputStream.readObject();
         return object;
     }
 
+    private void registerStation(StationRegistrationRequest message) throws IOException {
+        sendObject(new ClientAuthenticationResponse(true));
+        server.registerStation(message.getId(), socket, objectInputStream, objectOutputStream);
+        isListening = false;
+    }
 }
